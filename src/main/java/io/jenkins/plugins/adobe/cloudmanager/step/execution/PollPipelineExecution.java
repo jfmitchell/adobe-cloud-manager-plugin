@@ -33,12 +33,12 @@ import java.util.concurrent.TimeUnit;
 import hudson.AbortException;
 import hudson.Util;
 import hudson.model.TaskListener;
-import io.adobe.cloudmanager.CloudManagerApi;
-import io.adobe.cloudmanager.CloudManagerApiException;
+import io.adobe.cloudmanager.*;
 import io.jenkins.plugins.adobe.cloudmanager.CloudManagerPipelineExecution;
 import io.jenkins.plugins.adobe.cloudmanager.config.AdobeIOProjectConfig;
 import io.jenkins.plugins.adobe.cloudmanager.util.CloudManagerApiUtil;
 import jenkins.util.Timer;
+import org.apache.commons.lang3.*;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
 
 /**
@@ -51,12 +51,14 @@ public class PollPipelineExecution extends AbstractStepExecution {
 
   private final long recurrencePeriod;
   private final boolean quiet;
+  private final String stepToMonitor;
   protected transient volatile ScheduledFuture<?> task;
 
-  public PollPipelineExecution(StepContext context, long recurrencePeriod, boolean quiet) {
+  public PollPipelineExecution(StepContext context, long recurrencePeriod, boolean quiet, String stepToMonitor) {
     super(context);
     this.recurrencePeriod = recurrencePeriod;
     this.quiet = quiet;
+    this.stepToMonitor = stepToMonitor;
   }
 
   @Override
@@ -98,6 +100,18 @@ public class PollPipelineExecution extends AbstractStepExecution {
     try {
       CloudManagerApi api = CloudManagerApiUtil.createApi().apply(aioProjectName).orElseThrow(() -> new AbortException(Messages.AbstractStepExecution_error_missingBuildData()));
       CloudManagerPipelineExecution execution = getBuildData().getCmExecution();
+      if (StringUtils.isNotBlank(stepToMonitor)) {
+        PipelineExecution cmExecution = api.getExecution(execution.getProgramId(), execution.getPipelineId(), execution.getExecutionId());
+        PipelineExecutionStepState state = api.getExecutionStepState(cmExecution, stepToMonitor);
+        switch (state.getStatusState()) {
+          case NOT_STARTED:
+          case RUNNING:
+          case ROLLING_BACK:
+            return false;
+          default:
+            return true;
+        }
+      }
       if (api.isExecutionRunning(execution.getProgramId(), execution.getPipelineId(), execution.getExecutionId())) {
         if (!quiet) {
           getContext().get(TaskListener.class).getLogger().println(Messages.PollPipelineExecution_waiting(Util.getTimeSpanString(recurrencePeriod)));

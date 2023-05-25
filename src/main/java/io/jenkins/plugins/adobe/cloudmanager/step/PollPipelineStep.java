@@ -66,6 +66,7 @@ public class PollPipelineStep extends Step {
 
   private long recurrencePeriod = DEFAULT_RECURRENCE_PERIOD;
   private boolean quiet = false;
+  private String stepToMonitor;
 
   @DataBoundConstructor
   public PollPipelineStep() {
@@ -95,9 +96,14 @@ public class PollPipelineStep extends Step {
     this.quiet = quiet;
   }
 
+  @DataBoundSetter
+  public void setStepToMonitor(String step) { this.stepToMonitor = step; }
+
+  public String getStepToMonitor() { return this.stepToMonitor; }
+
   @Override
   public StepExecution start(StepContext context) throws Exception {
-    return new PollPipelineExecution(context, recurrencePeriod, quiet);
+    return new PollPipelineExecution(context, recurrencePeriod, quiet, stepToMonitor);
   }
 
   @Extension
